@@ -1,29 +1,17 @@
 import express from "express";
-import fetch from "node-fetch";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
-import helmet from "helmet";
+import fetch from "node-fetch";
 
 const app = express();
-
+app.use(cors());
 app.use(express.json());
-app.use(helmet());
-
-app.use(cors({
-  origin: "*"
-}));
-
-app.use(rateLimit({
-  windowMs: 60 * 1000,
-  max: 20
-}));
 
 app.post("/chat", async (req, res) => {
   try {
     const { messages } = req.body;
 
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: "Mensagens inválidas" });
+    if (!messages) {
+      return res.status(400).json({ error: "Mensagens não enviadas" });
     }
 
     const response = await fetch(
@@ -35,10 +23,8 @@ app.post("/chat", async (req, res) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages,
-          temperature: 0.6,
-          max_tokens: 600
+          model: "gpt-3.5-turbo",
+          messages
         })
       }
     );
@@ -47,10 +33,12 @@ app.post("/chat", async (req, res) => {
     res.json(data);
 
   } catch (err) {
-    res.status(500).json({ error: "Erro interno no servidor" });
+    console.error(err);
+    res.status(500).json({ error: "Erro interno" });
   }
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Servidor rodando");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Backend OK na porta", PORT);
 });
