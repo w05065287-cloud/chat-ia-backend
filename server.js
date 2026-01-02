@@ -6,22 +6,17 @@ import rateLimit from "express-rate-limit";
 
 const app = express();
 
-// Segurança
+/* 🔒 Segurança básica */
 app.use(helmet());
-
-app.use(cors({
-  origin: "*",
-  methods: ["POST"],
-}));
-
+app.use(cors());
 app.use(express.json());
 
-// Limite de requisições (anti-spam)
+/* 🚫 Anti-spam (proteção) */
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 20
+  windowMs: 1 * 60 * 1000, // 1 minuto
+  max: 30 // 30 requisições por IP
 });
-app.use("/chat", limiter);
+app.use(limiter);
 
 app.post("/chat", async (req, res) => {
   try {
@@ -49,8 +44,12 @@ app.post("/chat", async (req, res) => {
 
     const data = await response.json();
 
-    // Log para debug
-    console.log("OpenAI:", JSON.stringify(data, null, 2));
+    // 🔍 Log para debug no Render
+    console.log("Resposta OpenAI:", JSON.stringify(data, null, 2));
+
+    if (data.error) {
+      return res.status(500).json({ error: data.error.message });
+    }
 
     res.json(data);
 
@@ -62,5 +61,5 @@ app.post("/chat", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("Backend OK na porta", PORT);
+  console.log("Backend rodando na porta", PORT);
 });
