@@ -1,17 +1,34 @@
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 const app = express();
-app.use(cors());
+
+// Segurança
+app.use(helmet());
+
+app.use(cors({
+  origin: "*",
+  methods: ["POST"],
+}));
+
 app.use(express.json());
+
+// Limite de requisições (anti-spam)
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 20
+});
+app.use("/chat", limiter);
 
 app.post("/chat", async (req, res) => {
   try {
     const { messages } = req.body;
 
-    if (!messages) {
-      return res.status(400).json({ error: "Mensagens não enviadas" });
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "Mensagens inválidas" });
     }
 
     const response = await fetch(
@@ -23,18 +40,23 @@ app.post("/chat", async (req, res) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          messages
+          model: "gpt-4o-mini",
+          messages,
+          temperature: 0.6
         })
       }
     );
 
     const data = await response.json();
+
+    // Log para debug
+    console.log("OpenAI:", JSON.stringify(data, null, 2));
+
     res.json(data);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro interno" });
+    console.error("Erro no backend:", err);
+    res.status(500).json({ error: "Erro interno no servidor" });
   }
 });
 
