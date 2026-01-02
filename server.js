@@ -6,26 +6,23 @@ import rateLimit from "express-rate-limit";
 
 const app = express();
 
-/* 🔒 Segurança básica */
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-/* 🚫 Anti-spam (proteção) */
-const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minuto
-  max: 30 // 30 requisições por IP
-});
-app.use(limiter);
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  max: 30
+}));
 
 app.post("/chat", async (req, res) => {
+  const { messages } = req.body;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
   try {
-    const { messages } = req.body;
-
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: "Mensagens inválidas" });
-    }
-
     const response = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -37,29 +34,43 @@ app.post("/chat", async (req, res) => {
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages,
-          temperature: 0.6
+          stream: true
         })
       }
     );
 
-    const data = await response.json();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
 
-    // 🔍 Log para debug no Render
-    console.log("Resposta OpenAI:", JSON.stringify(data, null, 2));
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
 
-    if (data.error) {
-      return res.status(500).json({ error: data.error.message });
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n").filter(l => l.startsWith("data: "));
+
+      for (const line of lines) {
+        const data = line.replace("data: ", "").trim();
+        if (data === "[DONE]") {
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
+
+        try {
+          const json = JSON.parse(data);
+          const token = json.choices?.[0]?.delta?.content;
+          if (token) {
+            res.write(`data: ${token}\n\n`);
+          }
+        } catch {}
+      }
     }
 
-    res.json(data);
-
   } catch (err) {
-    console.error("Erro no backend:", err);
-    res.status(500).json({ error: "Erro interno no servidor" });
+    res.write(`data: ERRO\n\n`);
+    res.end();
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Backend rodando na porta", PORT);
-});
+app.listen(process.env.PORT || 3000);
