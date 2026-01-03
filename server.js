@@ -1,21 +1,31 @@
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 const app = express();
 
+// Segurança básica
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+// Limite de requisições (anti-abuso)
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 20
+  })
+);
+
 app.post("/chat", async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { message } = req.body;
 
-    if (!messages || !messages.length) {
-      return res.status(400).json({ error: "Mensagens inválidas" });
+    if (!message) {
+      return res.status(400).json({ error: "Mensagem vazia" });
     }
-
-    const userMessage = messages[messages.length - 1].content;
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -25,29 +35,21 @@ app.post("/chat", async (req, res) => {
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        input: userMessage
+        input: message
       })
     });
 
     const data = await response.json();
 
-    const text =
-      data.output_text ||
-      data.output?.[0]?.content?.[0]?.text ||
-      "Erro ao gerar resposta";
+    if (!data.output_text) {
+      console.error("Erro OpenAI:", data);
+      return res.status(500).json({ error: "Erro ao gerar resposta" });
+    }
 
-    res.json({
-      choices: [
-        {
-          message: {
-            content: text
-          }
-        }
-      ]
-    });
+    res.json({ reply: data.output_text });
 
   } catch (err) {
-    console.error("ERRO BACKEND:", err);
+    console.error("Erro backend:", err);
     res.status(500).json({ error: "Erro interno" });
   }
 });
