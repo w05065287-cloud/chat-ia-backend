@@ -10,6 +10,6 @@
     "cors": "^2.8.5",
     "node-fetch": "^3.3.2",
     "helmet": "^7.0.0",
-    "express-rate-limit": "^7.0.0"
+    "express-rate-limit": "^7.4.0"
   }
 }
